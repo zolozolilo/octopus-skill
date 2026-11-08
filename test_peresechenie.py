@@ -202,8 +202,8 @@ def test_sverka_nezakommichennoe(tmp_path, repo):
 
 
 def test_sverka_kirillica_v_puti(tmp_path, repo):
-    commit(repo, "модули/Склад.py", "модули/Левый.py")
-    code, out = sverka(tmp_path, repo, "Файл модули/Склад.py")
+    commit(repo, "модули/Заказы.py", "модули/Левый.py")
+    code, out = sverka(tmp_path, repo, "Файл модули/Заказы.py")
     assert code == 1
     assert "Левый.py" in out and "совпало: 1" in out
 
@@ -221,12 +221,12 @@ def test_sverka_do_ogranichivaet(tmp_path, repo):
 
 
 # ── 5. Карта ──────────────────────────────────────────────────────────
-# Склад ← заявки (вызов функции склада) ← отчёт (импорт заявок); тест склада импортирует склад.
-# Паспорт склада (документ) ссылается на функцию склада. Два router.py — неоднозначное имя;
+# Заказы ← счета (вызов функции заказов) ← отчёт (импорт счетов); тест заказов импортирует заказы.
+# Описание заказов (документ) ссылается на функцию заказов. Два router.py — неоднозначное имя;
 # config.py в корне и в sub/ (sub/user.py импортирует sub/config.py) — голое имя не угадываем.
 # «contains» и «rationale_for» — устройство, не зависимость.
-MAP_FILES = ["app/sklad.py", "app/zayavki.py", "app/otchet.py", "tests/test_sklad.py",
-             "app/router.py", "lib/router.py", "docs/sklad.md",
+MAP_FILES = ["app/orders.py", "app/invoices.py", "app/otchet.py", "tests/test_orders.py",
+             "app/router.py", "lib/router.py", "docs/orders.md",
              "config.py", "sub/config.py", "sub/user.py"]
 
 
@@ -236,24 +236,24 @@ def uzel(uid, path, label=None, kind="code"):
 
 MAP = {
     "directed": True, "multigraph": False, "graph": {},
-    "nodes": [uzel("sklad", "app/sklad.py"), uzel("sklad.vydat", "app/sklad.py", "vydat()"),
-              uzel("zayavki", "app/zayavki.py"), uzel("zayavki.sozdat", "app/zayavki.py", "sozdat()"),
-              uzel("otchet", "app/otchet.py"), uzel("t_sklad", "tests/test_sklad.py"),
+    "nodes": [uzel("orders", "app/orders.py"), uzel("orders.vydat", "app/orders.py", "vydat()"),
+              uzel("invoices", "app/invoices.py"), uzel("invoices.sozdat", "app/invoices.py", "sozdat()"),
+              uzel("otchet", "app/otchet.py"), uzel("t_orders", "tests/test_orders.py"),
               uzel("router_a", "app/router.py"), uzel("router_b", "lib/router.py"),
-              uzel("pasport", "docs/sklad.md", "Склад", kind="document"),
+              uzel("opisanie", "docs/orders.md", "Заказы", kind="document"),
               uzel("cfg_root", "config.py"), uzel("cfg_sub", "sub/config.py", "sub/config.py"),
               uzel("user", "sub/user.py"),
               {"id": "logging", "label": "logging"}],
     "links": [
-        {"source": "zayavki.sozdat", "target": "sklad.vydat", "relation": "calls"},
-        {"source": "otchet", "target": "zayavki", "relation": "imports_from"},
-        {"source": "t_sklad", "target": "sklad", "relation": "imports"},
-        {"source": "pasport", "target": "sklad.vydat", "relation": "references"},
+        {"source": "invoices.sozdat", "target": "orders.vydat", "relation": "calls"},
+        {"source": "otchet", "target": "invoices", "relation": "imports_from"},
+        {"source": "t_orders", "target": "orders", "relation": "imports"},
+        {"source": "opisanie", "target": "orders.vydat", "relation": "references"},
         {"source": "user", "target": "cfg_sub", "relation": "imports_from"},
-        {"source": "sklad", "target": "sklad.vydat", "relation": "defines"},
-        {"source": "sklad", "target": "logging", "relation": "calls"},
-        {"source": "router_a", "target": "sklad", "relation": "contains"},
-        {"source": "router_b", "target": "sklad", "relation": "rationale_for"},
+        {"source": "orders", "target": "orders.vydat", "relation": "defines"},
+        {"source": "orders", "target": "logging", "relation": "calls"},
+        {"source": "router_a", "target": "orders", "relation": "contains"},
+        {"source": "router_b", "target": "orders", "relation": "rationale_for"},
     ],
 }
 
@@ -261,7 +261,7 @@ MAP = {
 @pytest.fixture
 def karta(tmp_path):
     """Репо с файлами и картой graphify-out/graph.json; карта новее файлов."""
-    r = tmp_path / "portal"
+    r = tmp_path / "repo"
     old = time.time() - 3600
     for f in MAP_FILES:
         put(r, f)
@@ -280,29 +280,29 @@ def zadeto(*args):
 
 
 def test_karta_pryamaya_svyaz_stop(karta):
-    """Заявки вызывают функцию склада: правка склада задевает заявки напрямую — СТОП."""
-    code, out = run("--graphify", str(karta), A="Правь app/sklad.py", B="Правь app/zayavki.py")
+    """Заявки вызывают функцию заказов: правка заказов задевает счета напрямую — СТОП."""
+    code, out = run("--graphify", str(karta), A="Правь app/orders.py", B="Правь app/invoices.py")
     assert code == 1
-    assert "СТОП-СВЯЗЬ: правка «A» задевает app/zayavki.py из «B»" in out
+    assert "СТОП-СВЯЗЬ: правка «A» задевает app/invoices.py из «B»" in out
 
 
 def test_karta_cherez_odnogo_preduprezhdenie(karta):
-    """Отчёт зависит от склада только через заявки — предупреждение, не СТОП."""
-    code, out = run("--graphify", str(karta), A="app/sklad.py", C="app/otchet.py")
+    """Отчёт зависит от заказов только через счета — предупреждение, не СТОП."""
+    code, out = run("--graphify", str(karta), A="app/orders.py", C="app/otchet.py")
     assert code == 0
     assert "СТОП-СВЯЗЬ" not in out
-    assert "через одного: правка «A» задевает app/otchet.py из «C» (через app/zayavki.py)" in out
+    assert "через одного: правка «A» задевает app/otchet.py из «C» (через app/invoices.py)" in out
 
 
 def test_karta_testy_priyomshchiku(karta):
     """Тесты, которые задевает правка задания, — списком приёмщику."""
-    _, out = run("--graphify", str(karta), A="app/sklad.py")
-    assert "тесты для «A» (1): tests/test_sklad.py" in out
+    _, out = run("--graphify", str(karta), A="app/orders.py")
+    assert "тесты для «A» (1): tests/test_orders.py" in out
 
 
 def test_karta_ustrojstvo_ne_svyaz(karta):
-    """«contains» и «rationale_for» — не вызов и не импорт: router.py склад не задевает."""
-    code, out = run("--graphify", str(karta), A="app/sklad.py", R="app/router.py", L="lib/router.py")
+    """«contains» и «rationale_for» — не вызов и не импорт: router.py заказы не задевает."""
+    code, out = run("--graphify", str(karta), A="app/orders.py", R="app/router.py", L="lib/router.py")
     assert code == 0
     assert "СТОП-СВЯЗЬ" not in out and "через одного" not in out
 
@@ -336,7 +336,7 @@ def test_karta_net_v_karte(karta):
 
 def test_karta_ne_provereno_ne_chisto(karta):
     """Файл задания не нашёлся в карте — «связей нет» без оговорки не говорим."""
-    code, out = run("--graphify", str(karta), A="app/novyj.py", B="app/zayavki.py")
+    code, out = run("--graphify", str(karta), A="app/novyj.py", B="app/invoices.py")
     assert code == 0
     assert "прямых связей между заданиями нет" not in out
     assert "не проверено файлов: 1" in out
@@ -345,7 +345,7 @@ def test_karta_ne_provereno_ne_chisto(karta):
 def test_karta_pustaya(karta):
     """Пустая карта — проверки не было: «НЕ ЗНАЮ», а не «связей нет»."""
     (karta / "graphify-out" / "graph.json").write_text('{"nodes": [], "links": []}', encoding="utf-8")
-    code, out = run("--graphify", str(karta), A="app/sklad.py", B="app/zayavki.py")
+    code, out = run("--graphify", str(karta), A="app/orders.py", B="app/invoices.py")
     assert code == 2
     assert "карта: НЕ ЗНАЮ" in out
     assert "связей между заданиями нет" not in out
@@ -356,62 +356,62 @@ def test_karta_klyuch_edges(karta):
     graph = {**MAP, "edges": MAP["links"]}
     del graph["links"]
     (karta / "graphify-out" / "graph.json").write_text(json.dumps(graph), encoding="utf-8")
-    code, out = run("--graphify", str(karta), A="app/sklad.py", B="app/zayavki.py")
+    code, out = run("--graphify", str(karta), A="app/orders.py", B="app/invoices.py")
     assert code == 1
     assert "СТОП-СВЯЗЬ" in out
 
 
 def test_karta_ne_kod_ne_shumit(karta):
     """Карта знает .py и .md: .json в задании — одна строка «карта не видит», без «нет в карте»."""
-    _, out = run("--graphify", str(karta), A="app/sklad.py, config/nastrojki.json")
+    _, out = run("--graphify", str(karta), A="app/orders.py, config/nastrojki.json")
     assert "нет в карте" not in out
     assert "карта не видит: .json" in out
 
 
 def test_karta_dokument_ne_stop(karta):
-    """Паспорт ссылается на функцию склада: правка кода документ не ломает — сверить текст, не СТОП."""
-    code, out = run("--graphify", str(karta), A="app/sklad.py", P="docs/sklad.md")
+    """Описание ссылается на функцию заказов: правка кода документ не ломает — сверить текст, не СТОП."""
+    code, out = run("--graphify", str(karta), A="app/orders.py", P="docs/orders.md")
     assert code == 0
     assert "СТОП-СВЯЗЬ" not in out
-    assert "документ: docs/sklad.md из «P» ссылается на код «A» — сверить текст после правки" in out
+    assert "документ: docs/orders.md из «P» ссылается на код «A» — сверить текст после правки" in out
 
 
 def test_karta_absolyutnyj_put_i_obratnye_slesh(karta):
-    code, out = run("--graphify", str(karta), A=str(karta / "app" / "sklad.py"), B=r"app\zayavki.py")
+    code, out = run("--graphify", str(karta), A=str(karta / "app" / "orders.py"), B=r"app\invoices.py")
     assert code == 1
     assert "СТОП-СВЯЗЬ" in out
 
 
 def test_karta_ne_garantiya(karta):
     """Карта не видит общих ключей JSON и полей данных — вывод говорит это прямо."""
-    _, out = run("--graphify", str(karta), A="app/sklad.py")
+    _, out = run("--graphify", str(karta), A="app/orders.py")
     assert "не гарантия" in out and "grep" in out
 
 
 def test_karta_ustarela(karta):
     """Файл правлен после карты: предупреждение с командой обновления, код выхода тот же."""
     future = time.time() + 60
-    os.utime(karta / "app" / "zayavki.py", (future, future))
-    code, out = run("--graphify", str(karta), A="app/sklad.py")
+    os.utime(karta / "app" / "invoices.py", (future, future))
+    code, out = run("--graphify", str(karta), A="app/orders.py")
     assert code == 0
-    assert "карта старше кода: после неё правили 1 файл (app/zayavki.py)" in out
+    assert "карта старше кода: после неё правили 1 файл (app/invoices.py)" in out
     assert "graphify update" in out
 
 
 def test_karta_svezhaya_molchit(karta):
-    _, out = run("--graphify", str(karta), A="app/sklad.py")
+    _, out = run("--graphify", str(karta), A="app/orders.py")
     assert "карта старше кода" not in out
 
 
 def test_karta_net_karty(tmp_path):
-    code, out = run("--graphify", str(tmp_path), A="app/sklad.py")
+    code, out = run("--graphify", str(tmp_path), A="app/orders.py")
     assert code == 2
     assert "карта: НЕ ЗНАЮ" in out
 
 
 def test_karta_chuzhoj_format(karta):
     (karta / "graphify-out" / "graph.json").write_text('{"nodes": 1}', encoding="utf-8")
-    code, out = run("--graphify", str(karta), A="app/sklad.py")
+    code, out = run("--graphify", str(karta), A="app/orders.py")
     assert code == 2
     assert "карта: НЕ ЗНАЮ" in out
 
@@ -420,7 +420,7 @@ def test_karta_obnovit_snachala(karta, monkeypatch):
     """--obnovit: сначала одно обновление карты, потом проверка."""
     calls = []
     monkeypatch.setattr(per, "obnovit_kartu", calls.append)
-    code, _ = run("--graphify", str(karta), "--obnovit", A="app/sklad.py")
+    code, _ = run("--graphify", str(karta), "--obnovit", A="app/orders.py")
     assert calls == [str(karta)]
     assert code == 0
 
@@ -430,7 +430,7 @@ def test_karta_obnovit_ne_vyshlo(karta, monkeypatch):
     def fail(repo):
         raise RuntimeError("graphify не найден")
     monkeypatch.setattr(per, "obnovit_kartu", fail)
-    code, out = run("--graphify", str(karta), "--obnovit", A="app/sklad.py")
+    code, out = run("--graphify", str(karta), "--obnovit", A="app/orders.py")
     assert "обновить не вышло — graphify не найден" in out
     assert "тесты для «A» (1)" in out
     assert code == 0
@@ -438,16 +438,16 @@ def test_karta_obnovit_ne_vyshlo(karta, monkeypatch):
 
 def test_zadeto_nizhnij_konec(karta):
     """Нижний конец дерева: кого задевает правка файла — напрямую, через одного, тесты."""
-    code, out = zadeto("app/sklad.py", "--repo", karta)
+    code, out = zadeto("app/orders.py", "--repo", karta)
     assert code == 0
-    assert "напрямую (2): app/zayavki.py, tests/test_sklad.py" in out
+    assert "напрямую (2): app/invoices.py, tests/test_orders.py" in out
     assert "через одного (1): app/otchet.py" in out
-    assert "тесты (1): tests/test_sklad.py" in out
-    assert "документы (1): docs/sklad.md" in out
+    assert "тесты (1): tests/test_orders.py" in out
+    assert "документы (1): docs/orders.md" in out
 
 
 def test_zadeto_odin_fajl_dvazhdy(karta):
-    _, out = zadeto("app/sklad.py", "app/sklad.py", "--repo", karta)
+    _, out = zadeto("app/orders.py", "app/orders.py", "--repo", karta)
     assert out.count("— правка задевает:") == 1
 
 

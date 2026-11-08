@@ -532,7 +532,7 @@ def cmd_zadeto(args):
         if not path:
             print(f"{shown} — {why}")
             code = 2
-        elif path not in shown_paths:                    # «sklad.py» и «app/sklad.py» — один раз
+        elif path not in shown_paths:                    # «orders.py» и «app/orders.py» — один раз
             shown_paths.add(path)
             print_reach(karta, path)
     print_staleness(karta, args.repo)
